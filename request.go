@@ -597,16 +597,24 @@ func handleStruct(
 		return reflect.Value{}, err
 	}
 
-	node := new(Node)
-	if err := json.Unmarshal(data, &node.Attributes); err != nil {
-		return reflect.Value{}, err
-	}
-
 	var model reflect.Value
 	if fieldValue.Kind() == reflect.Ptr {
 		model = reflect.New(fieldValue.Type().Elem())
 	} else {
 		model = reflect.New(fieldValue.Type())
+	}
+
+	unmarshaler, ok := model.Interface().(json.Unmarshaler)
+	if ok {
+		if err := json.Unmarshal(data, &unmarshaler); err != nil {
+			return reflect.Value{}, err
+		}
+		return reflect.ValueOf(unmarshaler), err
+	}
+
+	node := new(Node)
+	if err := json.Unmarshal(data, &node.Attributes); err != nil {
+		return reflect.Value{}, err
 	}
 
 	if err := unmarshalNode(node, model, nil); err != nil {
