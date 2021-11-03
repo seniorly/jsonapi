@@ -1351,3 +1351,35 @@ func TestUnmarshalNestedStructSlice(t *testing.T) {
 			out.Teams[0].Members[0].Firstname)
 	}
 }
+
+func TestRequestSlicePointerValue(t *testing.T) {
+
+	sprq := &TestSlicePointer{
+		ID: "id",
+		Info: &Info{
+			Arr: &[]string{"aa"},
+		},
+	}
+	p, err := Marshal(sprq)
+	if err != nil {
+		t.Errorf("error on jsonapi marshalling: %v\n", err)
+		return
+	}
+
+	ps, err := json.Marshal(p)
+	if err != nil {
+		t.Errorf("error on json marshalling: %v\n", err)
+		return
+	}
+
+	uars := new(TestSlicePointer)
+	reader := bytes.NewReader(ps)
+
+	err = UnmarshalPayload(reader, uars)
+	if err != nil {
+		t.Errorf("error on jsonapi unmarshalling: %v\n", err)
+		t.Error(string(ps))
+		return
+	}
+
+}

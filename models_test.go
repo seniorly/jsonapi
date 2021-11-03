@@ -196,3 +196,12 @@ type CustomAttributeTypes struct {
 	Float  CustomFloatType  `jsonapi:"attr,float"`
 	String CustomStringType `jsonapi:"attr,string"`
 }
+
+type TestSlicePointer struct {
+	ID   string `jsonapi:"primary,SlicePointer"`
+	Info *Info  `jsonapi:"attr,info"`
+}
+
+type Info struct {
+	Arr *[]string `jsonapi:"attr,arr" json:"arr,omitempty"`
+}

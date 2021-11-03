@@ -468,19 +468,14 @@ func handleStringSlice(attribute interface{}) (reflect.Value, error) {
 }
 
 func handleStringSlicePointer(attribute interface{}) (reflect.Value, error) {
-	vTop := reflect.ValueOf(attribute)
-	v := vTop.Elem()
+	v := reflect.ValueOf(attribute)
 
 	values := make([]string, v.Len())
 	for i := 0; i < v.Len(); i++ {
 		values[i] = v.Index(i).Interface().(string)
 	}
-	outPointer := reflect.New(v.Type())
-	if outPointer.Elem().CanSet() {
-		outPointer.Elem().Set(reflect.ValueOf(values))
-	}
 
-	return outPointer, nil
+	return reflect.ValueOf(&values), nil
 }
 
 func handleTime(attribute interface{}, args []string, fieldValue reflect.Value) (reflect.Value, error) {
