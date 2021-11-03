@@ -403,6 +403,9 @@ func unmarshalAttribute(attribute interface{}, args []string, structField reflec
 	case reflect.TypeOf([]string{}):
 		return handleStringSlice(attribute)
 
+	case reflect.TypeOf(&[]string{}):
+		return handleStringSlicePointer(attribute)
+
 		// Handle field of type time.Time
 	case reflect.TypeOf(time.Time{}), reflect.TypeOf(new(time.Time)):
 		return handleTime(attribute, args, fieldValue)
@@ -461,6 +464,22 @@ func handleStringSlice(attribute interface{}) (reflect.Value, error) {
 	}
 
 	return reflect.ValueOf(values), nil
+}
+
+func handleStringSlicePointer(attribute interface{}) (reflect.Value, error) {
+	vTop := reflect.ValueOf(attribute)
+	v := vTop.Elem()
+
+	values := make([]string, v.Len())
+	for i := 0; i < v.Len(); i++ {
+		values[i] = v.Index(i).Interface().(string)
+	}
+	outPointer := reflect.New(v.Type())
+	if outPointer.Elem().CanSet() {
+		outPointer.Elem().Set(reflect.ValueOf(values))
+	}
+
+	return outPointer, nil
 }
 
 func handleTime(attribute interface{}, args []string, fieldValue reflect.Value) (reflect.Value, error) {
