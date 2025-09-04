@@ -141,7 +141,7 @@ func UnmarshalManyPayload(in io.Reader, t reflect.Type) ([]interface{}, error) {
 func unmarshalNode(data *Node, model reflect.Value, included *map[string]*Node) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("data is not a jsonapi representation of '%v'", model.Type())
+			err = fmt.Errorf("data is not a jsonapi representation of '%v' - panic: %v", model.Type(), r)
 		}
 	}()
 
@@ -437,6 +437,9 @@ func unmarshalAttribute(attribute interface{}, args []string, structField reflec
 		if fieldType == reflect.TypeOf(map[string]interface{}{}) {
 			return handleStringInterfaceMap(attribute, fieldValue, structField)
 		}
+		if fieldType.Key().Kind() == reflect.String {
+			return handleStringKeyMap(attribute, fieldValue, structField)
+		}
 	}
 
 	// As a final catch-all, ensure types line up to avoid a runtime panic.
@@ -674,4 +677,94 @@ func handleStructSlice(
 	}
 
 	return models, nil
+}
+
+func handleStringKeyMap(attribute interface{}, fieldValue reflect.Value, structField reflect.StructField) (reflect.Value, error) {
+	// Convert input to map[string]interface{} first
+	inputMap, ok := attribute.(map[string]interface{})
+	if !ok {
+		return reflect.Value{}, fmt.Errorf("handleStringKeyMap: attribute is not map[string]interface{}, got %T", attribute)
+	}
+
+	// Get the map's value type
+	mapType := fieldValue.Type()
+	valueType := mapType.Elem()
+
+	// Handle different value types
+	switch valueType.Kind() {
+	case reflect.Interface:
+		// For map[string]interface{}, use existing logic
+		return reflect.ValueOf(inputMap), nil
+
+	case reflect.Struct:
+		// For map[string]SomeStruct, convert each value
+		return convertMapValues(inputMap, mapType, valueType)
+
+	case reflect.Ptr:
+		// For map[string]*SomeStruct, convert each value to pointer
+		if valueType.Elem().Kind() == reflect.Struct {
+			return convertMapValuesToPtr(inputMap, mapType, valueType)
+		}
+	}
+
+	return reflect.Value{}, newErrUnsupportedMapType(mapType, structField)
+}
+
+func convertMapValues(inputMap map[string]interface{}, mapType, valueType reflect.Type) (reflect.Value, error) {
+	// Create a new map of the target type
+	resultMap := reflect.MakeMap(mapType)
+
+	for key, value := range inputMap {
+		// Create a new instance of the value type
+		newValue := reflect.New(valueType)
+
+		// Use existing handleStruct logic to convert the value
+		convertedValue, err := handleStruct(value, newValue.Elem())
+		if err != nil {
+			return reflect.Value{}, fmt.Errorf("convertMapValues: failed to convert map value for key %s: %w", key, err)
+		}
+
+		// handleStruct returns a pointer, but for map[string]Struct we need the struct value
+		actualValue := convertedValue
+		if convertedValue.Kind() == reflect.Ptr {
+			actualValue = convertedValue.Elem()
+		}
+
+		// Set the converted value in the result map
+		resultMap.SetMapIndex(reflect.ValueOf(key), actualValue)
+	}
+
+	return resultMap, nil
+}
+
+func convertMapValuesToPtr(inputMap map[string]interface{}, mapType, valueType reflect.Type) (reflect.Value, error) {
+	// Similar to above but creates pointers to structs
+	resultMap := reflect.MakeMap(mapType)
+
+	for key, value := range inputMap {
+		// Create a new pointer to the struct type
+		newValue := reflect.New(valueType.Elem())
+
+		// Convert the value using existing handleStruct logic
+		convertedValue, err := handleStruct(value, newValue.Elem())
+		if err != nil {
+			return reflect.Value{}, fmt.Errorf("failed to convert map value for key %s: %w", key, err)
+		}
+
+		// Set the converted struct value into the pointer we created
+		newValue.Elem().Set(convertedValue)
+
+		// Set the pointer in the result map
+		resultMap.SetMapIndex(reflect.ValueOf(key), newValue)
+	}
+
+	return resultMap, nil
+}
+
+func newErrUnsupportedMapType(mapType reflect.Type, structField reflect.StructField) error {
+	return fmt.Errorf(
+		"unsupported map type %s for field %s. Supported: map[string]interface{}, map[string]struct, map[string]*struct",
+		mapType.String(),
+		structField.Name,
+	)
 }

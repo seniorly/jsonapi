@@ -1374,3 +1374,80 @@ func TestRequestSlicePointerValue(t *testing.T) {
 	}
 
 }
+
+// Test struct for custom map values
+type DisclosureState struct {
+	IsAcknowledged  *bool  `jsonapi:"attr,isAcknowledged" json:"isAcknowledged,omitempty"`
+	DisclosureText  string `jsonapi:"attr,disclosureText" json:"disclosureText,omitempty"`
+	DisclosureState string `jsonapi:"attr,disclosureState" json:"disclosureState,omitempty"`
+}
+
+type TestDisclosureData struct {
+	ID               string                     `jsonapi:"primary,testdisclosures"`
+	StateDisclosures map[string]DisclosureState `jsonapi:"attr,stateDisclosures"`
+	HasOptIn         *bool                      `jsonapi:"attr,hasOptIn"`
+}
+
+func TestUnmarshalMapWithCustomStruct(t *testing.T) {
+	// Test using the same pattern as other working tests
+	sample := map[string]interface{}{
+		"data": map[string]interface{}{
+			"type": "testdisclosures",
+			"id":   "1",
+			"attributes": map[string]interface{}{
+				"stateDisclosures": map[string]interface{}{
+					"TX": map[string]interface{}{
+						"isAcknowledged":  false,
+						"disclosureText":  "Texas disclosure text",
+						"disclosureState": "TX",
+					},
+				},
+				"hasOptIn": true,
+			},
+		},
+	}
+
+	data, err := json.Marshal(sample)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var result TestDisclosureData
+	err = UnmarshalPayload(bytes.NewReader(data), &result)
+	if err != nil {
+		t.Logf("Full error: %v", err)
+		t.Logf("Data was: %s", string(data))
+		t.Fatalf("Failed to unmarshal payload: %v", err)
+	}
+
+	// Verify the map was unmarshaled correctly
+	if len(result.StateDisclosures) != 1 {
+		t.Errorf("Expected 1 state disclosure, got %d", len(result.StateDisclosures))
+	}
+
+	// Check TX disclosure
+	txDisclosure, exists := result.StateDisclosures["TX"]
+	if !exists {
+		t.Error("Expected TX disclosure to exist")
+	} else {
+
+		if txDisclosure.IsAcknowledged == nil {
+			t.Error("Expected TX IsAcknowledged to not be nil")
+		} else if *txDisclosure.IsAcknowledged != false {
+			t.Errorf("Expected TX IsAcknowledged to be false, got %v", *txDisclosure.IsAcknowledged)
+		}
+		if txDisclosure.DisclosureText != "Texas disclosure text" {
+			t.Errorf("Expected TX disclosure text to be 'Texas disclosure text', got '%s'", txDisclosure.DisclosureText)
+		}
+		if txDisclosure.DisclosureState != "TX" {
+			t.Errorf("Expected TX disclosure state to be 'TX', got '%s'", txDisclosure.DisclosureState)
+		}
+	}
+
+	// Check other field
+	if result.HasOptIn == nil || *result.HasOptIn != true {
+		t.Errorf("Expected HasOptIn to be true, got %v", result.HasOptIn)
+	}
+
+	t.Log("Map[string]CustomStruct unmarshaling test passed!")
+}
